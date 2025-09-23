@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """
-enable_xrd_interfaces.py
+noshutter.py
 ========================
 
 Enable all GigabitEthernet interfaces on Cisco XRd routers in a Containerlab lab.
+Enable LLDP globally on Cisco XRd routers in a Containerlab lab.
 
 Steps
 -----
@@ -14,6 +15,7 @@ Steps
    - Run `show ip int brief`
    - Find all `GigabitEthernet` interfaces
    - Configure `no shutdown` on each
+   - enable lldp
    - Commit and exit
 
 Requirements
@@ -69,11 +71,34 @@ def enable_xrd_interfaces(host: str, username: str, password: str):
     for iface in gig_ints:
         conn.send_configs([
             f"interface {iface}",
-            "no shutdown",
-            "commit",
+            "no shutdown"
+            #"no shutdown",
+            #"commit"
         ])
         print(f"✅ Enabled {iface} on {host}")
 
+    # Commit
+    conn.send_config("commit")
+    conn.close()
+
+
+def enable_lldp(host: str, username: str, password: str):
+    """Login to XRd router, enable LLDP, commit, and exit."""
+    conn = Scrapli(
+        host=host,
+        auth_username=username,
+        auth_password=password,
+        platform="cisco_iosxr",
+        auth_strict_key=False,
+    )
+    conn.open()
+
+    # Enable LLDP globally
+    conn.send_configs(["lldp"])
+    print("✅ LLDP enabled globally.")
+
+    # Commit
+    conn.send_config("commit")
     conn.close()
 
 
@@ -89,7 +114,12 @@ def main():
                 username="clab",
                 password="clab@123",
             )
-
+            print(f"📡 Enabling LLDP {name} ({kind})...")
+            enable_lldp(
+                host=name,
+                username="clab",
+                password="clab@123",
+            )
 
 if __name__ == "__main__":
     main()
