@@ -71,7 +71,8 @@ def enable_xrd_interfaces(host: str, username: str, password: str):
     for iface in gig_ints:
         conn.send_configs([
             f"interface {iface}",
-            "no shutdown"
+            "no shutdown",
+            f"description {iface} - tbc"
             #"no shutdown",
             #"commit"
         ])
