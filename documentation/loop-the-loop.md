@@ -1,22 +1,45 @@
 loop-the-loop.py
 ================
 
-Automates Loopback0 interface provisioning for XRd routers in a Containerlab lab.
+Configure Loopback0 interfaces automatically on Containerlab routers.
 
-- Runs `containerlab inspect -f json`
-- Parses the device list (name + kind)
-- Logs into each XRd router via SSH using Scrapli
-- Creates Loopback0 and configures IPv4/IPv6 addresses:
-  - IPv4: from 1.1.1.0/24
-  - IPv6: from fd00::/8, encoding the last IPv4 octet into the IPv6 suffix
-- Address allocation scheme:
-  - Core routers (name starts with "c"):      start at 1.1.1.1
-  - Distribution routers (name starts with "d"): start at 1.1.1.51
-  - Access routers (name starts with "a"):    start at 1.1.1.101
-  - Service routers (name starts with "s"):   start at 1.1.1.151
-  - Customer routers (name starts with "CE"): start at 1.1.1.201
+Overview
+--------
+This script inspects a running Containerlab lab, connects to all Cisco XRd routers,
+and configures a `Loopback0` interface with unique IPv4 and IPv6 addresses.
 
-Requirements:
-- Python 3.8+
-- scrapli
-- containerlab in $PATH
+Addressing Scheme
+-----------------
+- **Core route reflectors (crr\*)** → start at `1.1.1.1`
+- **Core routers (c\*, except crr)** → start at `1.1.1.10`
+- **Distribution routers (d\*)** → start at `1.1.1.30`
+- **Access routers (a\*)** → start at `1.1.1.60`
+- **Service routers (s\*)** → start at `1.1.1.90`
+- **Customer routers (CE\*)** → start at `1.1.1.120`
+- **Other routers (no match)** → start at `1.1.1.150`
+- **Fallback mode**: If no categories match at all, addresses are assigned sequentially
+  from `1.1.1.1` upward, ignoring categories.
+
+IPv6 Addressing
+---------------
+Each router additionally receives an IPv6 loopback address from the `fd00::/8` space.
+The last IPv4 octet is encoded into the IPv6 address, e.g.:
+
+- IPv4: `1.1.1.5` → IPv6: `fd00::5`
+- IPv4: `1.1.1.120` → IPv6: `fd00::120`
+
+Usage
+-----
+From inside your Containerlab lab directory:
+
+    ./loop-the-loop.py
+
+The script will:
+1. Run `containerlab inspect -f json`
+2. Parse all XRd routers
+3. Assign and configure loopback addresses
+4. Commit the configuration
+
+Author
+------
+Stephan
