@@ -1,5 +1,3 @@
-# get_clab_config.py
-
 get_clab_config.py
 ===================
 
@@ -45,8 +43,7 @@ From inside your Containerlab lab directory:
 
     python3 get_clab_config.py
 
-#### Example
-
+Example:
 
     cd /home/user/containerlabs/hui-xrd-test-1
     python3 get_clab_config.py
@@ -61,4 +58,3 @@ A backup of the original `.clab.yml` will be created with the `.bak` extension.
 Author
 ------
 Stephan Baenisch <stephan@baenisch.de>
-

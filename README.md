@@ -1,7 +1,8 @@
-# Repository Documentation
+# Documentation Directory
 
-This repository contains the following scripts:
+- [clab_destroy.md](documentation/clab_destroy.md)
+- [get_clab_config.md](documentation/get_clab_config.md)
+- [loop-the-loop.md](documentation/loop-the-loop.md)
+- [noshutter.md](documentation/noshutter.md)
+- [xnetter.md](documentation/xnetter.md)
 
-| Script | Documentation |
-|--------|---------------|
-| `get_clab_config.py` | [docs/get_clab_config.md](docs/get_clab_config.md) |
