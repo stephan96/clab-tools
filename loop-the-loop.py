@@ -69,15 +69,16 @@ def get_base_ip(name: str) -> int:
 
 def configure_loopback(node: dict, ipv4_host: str, ipv6_host: str):
     """Push loopback config to XRd router."""
-    print(f"📡 Configuring {node['name']} ({node['ipv4_address']}) ...")
-    host = node["ipv4_address"].split("/")[0]
+    raw_ip = node["ipv4_address"]
+    host = raw_ip.split("/")[0]  # strip CIDR suffix
+    print(f"📡 Configuring {node['name']} ({host}) ...")
 
     conn = Scrapli(
         host=host,
         auth_username=XR_USERNAME,
         auth_password=XR_PASSWORD,
         platform="cisco_iosxr",
-        transport="paramiko",
+        transport="paramiko",       # required for XRd
         auth_strict_key=False,
     )
     conn.open()
@@ -92,6 +93,7 @@ def configure_loopback(node: dict, ipv4_host: str, ipv6_host: str):
     conn.close()
 
     print(f"✅ Configured Loopback0 with {ipv4_host}, {ipv6_host}")
+
 
 
 def main():
