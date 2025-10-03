@@ -70,8 +70,8 @@ def ospf_processes_for_role(role: str) -> list:
         return [1, 10]
     if role in ("dh", "ds"):
         return [10]
-    #if role == "ah":
-    if role == ("ahrg", "ahrb"):
+    if role == "ah":
+    #if role == ("ahrg", "ahrb"):
         return [10, 100]
     if role == "as":
         return [100]
@@ -160,8 +160,8 @@ def link_to_ospf(endpoints: list) -> tuple | None:
         return (100, "0.0.0.100")
 
     # ah↔ah → distribute across OSPF 10 and 100
-    #if n1.startswith("ah") and n2.startswith("ah"):
-    if n1.startswith("ahrg") and n2.startswith("ahrb"):
+    if n1.startswith("ah") and n2.startswith("ah"):
+    #if n1.startswith("ahrg") and n2.startswith("ahrb"):
         if sorted([i1, i2])[0] in (i1, i2):  # pick consistently
             return (10, "0.0.0.10")
         else:
