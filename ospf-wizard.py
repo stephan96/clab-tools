@@ -21,6 +21,10 @@ import re
 from scrapli import Scrapli
 
 
+
+DEBUG = False  # set to True or False to enable or suppress debug output
+
+
 # ---------------- Containerlab ----------------
 
 def run_containerlab_inspect() -> dict:
@@ -134,7 +138,8 @@ def link_to_ospf(endpoints: list) -> tuple | None:
     n2, i2 = endpoints[1].split(":")
 
     # DEBUG: show which endpoints are analyzed
-    print(f"🔍 Analyzing link endpoints: {n1}:{i1} ↔ {n2}:{i2}")
+    if DEBUG:
+        print(f"🔍 Analyzing link endpoints: {n1}:{i1} ↔ {n2}:{i2}")
 
     if n1.startswith("CE") or n2.startswith("CE"):
         return None
@@ -241,7 +246,8 @@ def get_loopback_ip(conn) -> str | None:
             local_intf = parts[1]
             neighbor_intf = parts[-1]
             neighbors.append((local_intf, neighbor, neighbor_intf))
-            print(f"Detected LLDP neighbor: {local_intf} → {neighbor} {neighbor_intf}")
+            if DEBUG:
+                print(f"Detected LLDP neighbor: {local_intf} → {neighbor} {neighbor_intf}")
     return neighbors
 
 
@@ -259,7 +265,8 @@ def get_lldp_neighbors(conn, name=None) -> list[tuple[str, str, str]]:
         m = pattern.match(line.strip())
         if m:
             neighbors.append((m.group("local_intf"), m.group("neighbor"), m.group("neighbor_intf")))
-            print(f"🔍 Parsed LLDP neighbor: {m.group('local_intf')} ↔ {m.group('neighbor')}:{m.group('neighbor_intf')}")
+            if DEBUG:
+                print(f"🔍 Parsed LLDP neighbor: {m.group('local_intf')} ↔ {m.group('neighbor')}:{m.group('neighbor_intf')}")
     return neighbors
 
 
