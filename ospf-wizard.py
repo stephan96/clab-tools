@@ -82,6 +82,50 @@ def link_to_ospf(endpoints: list) -> tuple | None:
     if n1.startswith("CE") or n2.startswith("CE"):
         return None
 
+    # core↔core
+    if (n1[0] in "cs") and (n2[0] in "cs"):
+        return (1, "0.0.0.0")
+
+    # ch↔ch
+    if n1.startswith("ch") and n2.startswith("ch"):
+        if i1.endswith("0/0/0/0") or i2.endswith("0/0/0/0"):
+            return (1, "0.0.0.0")
+        else:
+            return (10, "0.0.0.10")
+
+    # d↔d or d↔ah
+    if (n1.startswith("d") and n2.startswith("d")) or (
+        (n1.startswith("d") and n2.startswith("ah")) or (n2.startswith("d") and n1.startswith("ah"))
+    ):
+        return (10, "0.0.0.10")
+
+    # a↔a or ah↔a
+    if (n1.startswith("a") and n2.startswith("a")) or (
+        (n1.startswith("ah") and n2.startswith("a")) or (n2.startswith("a") and n1.startswith("ah"))
+    ):
+        return (100, "0.0.0.100")
+
+    # ah↔ah → distribute across OSPF 10 and 100
+    if n1.startswith("ah") and n2.startswith("ah"):
+        if sorted([i1, i2])[0] in (i1, i2):  # pick consistently
+            return (10, "0.0.0.10")
+        else:
+            return (100, "0.0.0.100")
+
+    # NEW: c↔d rule
+    if (n1.startswith("c") and n2.startswith("d")) or (n1.startswith("d") and n2.startswith("c")):
+        return (10, "0.0.0.10")
+
+    return None
+
+
+def link_to_ospf_bak(endpoints: list) -> tuple | None:
+    n1, i1 = endpoints[0].split(":")
+    n2, i2 = endpoints[1].split(":")
+
+    if n1.startswith("CE") or n2.startswith("CE"):
+        return None
+
     if (n1[0] in "cs") and (n2[0] in "cs"):
         return (1, "0.0.0.0")
 
@@ -122,7 +166,72 @@ def get_loopback_ip(conn) -> str | None:
             return m.group(1)
     return None
 
-def get_lldp_neighbors(conn, name: str) -> list[tuple[str, str, str]]:
+
+#def get_lldp_neighbors_bak3(conn, name=None) -> list[tuple[str, str, str]]:
+    """Return list of (local_interface, neighbor_name, neighbor_interface)."""
+    result = conn.send_command("show lldp neighbors")
+    neighbors = []
+    for line in result.result.splitlines():
+        line = line.strip()
+        # Skip empty lines and known headers
+        if not line or line.startswith("Device") or line.startswith("Capability") or line.startswith("Total") or line.startswith("Fri") or line.startswith("Mon") or line.startswith("Tue") or line.startswith("Wed") or line.startswith("Thu") or line.startswith("Oct") or line.startswith("Nov") or line.startswith("Dec") or line.startswith("Jan") or line.startswith("Feb") or line.startswith("Mar") or line.startswith("Apr") or line.startswith("May") or line.startswith("Jun") or line.startswith("Jul") or line.startswith("Aug") or line.startswith("Sep"):
+            continue
+        
+        parts = line.split()
+        if len(parts) >= 5:
+            neighbor = parts[0]
+            local_intf = parts[1]
+            neighbor_intf = parts[-1]
+            neighbors.append((local_intf, neighbor, neighbor_intf))
+            print(f"Detected LLDP neighbor: {local_intf} → {neighbor} {neighbor_intf}")
+    return neighbors
+
+
+
+def get_lldp_neighbors(conn, name=None) -> list[tuple[str, str, str]]:
+    """
+    Return list of (local_interface, neighbor_name, neighbor_interface)
+    Only valid LLDP neighbor lines are included.
+    """
+    #result = conn.send_command("show lldp neighbors")
+    result = conn.send_command("show lldp neighbors | include GigabitEthernet")
+    neighbors = []
+    # ccrb1           GigabitEthernet0/0/0/1          120        R               GigabitEthernet0/0/0/2
+    #pattern = re.compile(r"^(\S+)\s+(\S+)\s+(\d+)\s+(\S+)\s+(\S+)$")
+    pattern = re.compile(r"^(?=.*GigabitEthernet)(\S+)\s+(\S+)\s+(\d+)\s+(\S+)\s+(\S+)$")
+    #pattern = re.compile(r"^(\S+)\s+(\S+)\s+\d+\s+\S+\s+(\S+)$")
+
+    for line in result.result.splitlines():
+        # debug
+        #print(f"Parsing line: {line}")  # <-- debug print
+        m = pattern.match(line.strip())
+        if m:
+            neighbor_name = m.group(1)
+            local_intf = m.group(2)
+            neighbor_intf = m.group(3)
+            neighbors.append((local_intf, neighbor_name, neighbor_intf))
+    return neighbors
+
+
+def get_lldp_neighbors_bak2(conn, name: str) -> list[tuple[str, str, str]]:
+    """Return list of (local_interface, neighbor_name, neighbor_interface)."""
+    result = conn.send_command("show lldp neighbors")
+    neighbors = []
+    for line in result.result.splitlines():
+        # Skip headers and footer
+        if line.strip().startswith("Device") or line.strip().startswith("Total"):
+            continue
+        parts = line.split()
+        # LLDP table rows have at least 5 fields: <DeviceID> <LocalIntf> <Hold-time> <Capability> <PortID>
+        if len(parts) >= 5:
+            neighbor = parts[0]
+            local_intf = parts[1]
+            neighbor_intf = parts[-1]
+            neighbors.append((local_intf, neighbor, neighbor_intf))
+    return neighbors
+
+
+def get_lldp_neighbors_bak(conn, name: str) -> list[tuple[str, str, str]]:
     """Return list of (local_interface, neighbor_name, neighbor_interface)."""
     result = conn.send_command("show lldp neighbors")
     neighbors = []
