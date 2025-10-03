@@ -75,7 +75,58 @@ def ospf_processes_for_role(role: str) -> list:
     return []  # CE and others → no OSPF unless override
 
 
-def link_to_ospf(endpoints: list) -> tuple | None:
+link_count_tracker = {}
+
+def link_to_ospf(endpoints: list) -> tuple[int, str] | None:
+    n1, i1 = endpoints[0].split(":")
+    n2, i2 = endpoints[1].split(":")
+
+    # CE routers never OSPF
+    if n1.startswith("CE") or n2.startswith("CE"):
+        return None
+
+    # Special dual-link case
+    if (("ahrb" in n1 and "ahrg" in n2) or ("ahrb" in n2 and "ahrg" in n1)):
+        pair_key = tuple(sorted([n1, n2]))
+        count = link_count_tracker.get(pair_key, 0)
+        link_count_tracker[pair_key] = count + 1
+        if count == 0:
+            return (10, "0.0.0.10")
+        else:
+            return (100, "0.0.0.100")
+
+    # Core–Core
+    if (n1[0] in "cs") and (n2[0] in "cs"):
+        return (1, "0.0.0.0")
+
+    # ch–ch dual process
+    if n1.startswith("ch") and n2.startswith("ch"):
+        if i1.endswith("0/0/0/0") or i2.endswith("0/0/0/0"):
+            return (1, "0.0.0.0")
+        else:
+            return (10, "0.0.0.10")
+
+    # c–d and d–d links
+    if (n1.startswith("c") and n2.startswith("d")) or (n2.startswith("c") and n1.startswith("d")) or (n1.startswith("d") and n2.startswith("d")):
+        return (10, "0.0.0.10")
+
+    # a–a, ah–a, ah–ah links
+    if (n1.startswith("a") and n2.startswith("a")) or \
+       (n1.startswith("ah") and n2.startswith("a")) or \
+       (n2.startswith("ah") and n1.startswith("a")):
+        return (100, "0.0.0.100")
+
+    if n1.startswith("ah") and n2.startswith("ah"):
+        if i1.endswith("0/0/0/0") or i2.endswith("0/0/0/0"):
+            return (10, "0.0.0.10")
+        else:
+            return (100, "0.0.0.100")
+
+    return None
+
+
+
+def link_to_ospf_bak_latest(endpoints: list) -> tuple | None:
     n1, i1 = endpoints[0].split(":")
     n2, i2 = endpoints[1].split(":")
 
