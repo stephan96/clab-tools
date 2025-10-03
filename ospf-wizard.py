@@ -50,8 +50,10 @@ def get_router_role(name: str) -> str:
         return "dh"
     if name.startswith("ds"):
         return "ds"
-    if name.startswith("ah"):
-        return "ah"
+    if name.startswith("ahrg"):
+        return "ahrg"
+    if name.startswith("ahrb"):
+        return "ahrb"
     if name.startswith("as"):
         return "as"
     if name.startswith("c") or name.startswith("s"):
@@ -68,7 +70,8 @@ def ospf_processes_for_role(role: str) -> list:
         return [1, 10]
     if role in ("dh", "ds"):
         return [10]
-    if role == "ah":
+    #if role == "ah":
+    if role == ("ahrg", "ahrb"):
         return [10, 100]
     if role == "as":
         return [100]
@@ -77,7 +80,7 @@ def ospf_processes_for_role(role: str) -> list:
 
 link_count_tracker = {}
 
-def link_to_ospf(endpoints: list) -> tuple[int, str] | None:
+def link_to_ospf_bak2(endpoints: list) -> tuple[int, str] | None:
     n1, i1 = endpoints[0].split(":")
     n2, i2 = endpoints[1].split(":")
 
@@ -126,7 +129,7 @@ def link_to_ospf(endpoints: list) -> tuple[int, str] | None:
 
 
 
-def link_to_ospf_bak_latest(endpoints: list) -> tuple | None:
+def link_to_ospf(endpoints: list) -> tuple | None:
     n1, i1 = endpoints[0].split(":")
     n2, i2 = endpoints[1].split(":")
 
@@ -157,7 +160,8 @@ def link_to_ospf_bak_latest(endpoints: list) -> tuple | None:
         return (100, "0.0.0.100")
 
     # ah↔ah → distribute across OSPF 10 and 100
-    if n1.startswith("ah") and n2.startswith("ah"):
+    #if n1.startswith("ah") and n2.startswith("ah"):
+    if n1.startswith("ahrg") and n2.startswith("ahrb"):
         if sorted([i1, i2])[0] in (i1, i2):  # pick consistently
             return (10, "0.0.0.10")
         else:
