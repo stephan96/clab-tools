@@ -50,10 +50,10 @@ def get_router_role(name: str) -> str:
         return "dh"
     if name.startswith("ds"):
         return "ds"
-    if name.startswith("ahrg"):
-        return "ahrg"
-    if name.startswith("ahrb"):
-        return "ahrb"
+    if name.startswith("ah"):
+        return "ah"
+    #if name.startswith("ahrb"):
+    #    return "ahrb"
     if name.startswith("as"):
         return "as"
     if name.startswith("c") or name.startswith("s"):
@@ -132,6 +132,9 @@ def link_to_ospf_bak2(endpoints: list) -> tuple[int, str] | None:
 def link_to_ospf(endpoints: list) -> tuple | None:
     n1, i1 = endpoints[0].split(":")
     n2, i2 = endpoints[1].split(":")
+
+    # DEBUG: show which endpoints are analyzed
+    print(f"🔍 Analyzing link endpoints: {n1}:{i1} ↔ {n2}:{i2}")
 
     if n1.startswith("CE") or n2.startswith("CE"):
         return None
@@ -242,8 +245,25 @@ def get_loopback_ip(conn) -> str | None:
     return neighbors
 
 
-
 def get_lldp_neighbors(conn, name=None) -> list[tuple[str, str, str]]:
+    """Return list of (local_interface, neighbor_name, neighbor_interface)."""
+    # prevent router from showing time and date in output
+    result = conn.send_command("terminal exec prompt no-timestamp")
+    # get lldp neighbors
+    result = conn.send_command("show lldp neighbors | include GigabitEthernet")
+    neighbors = []
+    pattern = re.compile(
+        r"^(?P<neighbor>\S+)\s+(?P<local_intf>\S+)\s+\d+\s+\S+\s+(?P<neighbor_intf>\S+)$"
+    )
+    for line in result.result.splitlines():
+        m = pattern.match(line.strip())
+        if m:
+            neighbors.append((m.group("local_intf"), m.group("neighbor"), m.group("neighbor_intf")))
+            print(f"🔍 Parsed LLDP neighbor: {m.group('local_intf')} ↔ {m.group('neighbor')}:{m.group('neighbor_intf')}")
+    return neighbors
+
+
+def get_lldp_neighbors_bak_latest(conn, name=None) -> list[tuple[str, str, str]]:
     """
     Return list of (local_interface, neighbor_name, neighbor_interface)
     Only valid LLDP neighbor lines are included.
