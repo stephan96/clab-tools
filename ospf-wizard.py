@@ -49,20 +49,20 @@ LINK-TO-OSPF RULES
 All rules assume link endpoints are parsed as (local_node:local_iface, neighbor_node:neighbor_iface):
 
 1. Core & Service Links
-   - Links between all "c" and "s" routers: process 1, area 0.0.0.0
+   - Links between all "c" and "s" routers: process 1, area OSPF_AREA_CORE
    - Links between ch routers:
-       - If interface ends with 0/0/0/0: process 1, area 0.0.0.0
-       - Otherwise: process 10, area 0.0.0.10
-   - Links between c and d routers: process 10, area 0.0.0.10
+       - If interface ends with 0/0/0/0: process 1, area OSPF_AREA_CORE
+       - Otherwise: process 10, area OSPF_AREA_DISTRIBUTION
+   - Links between c and d routers: process 10, area OSPF_AREA_DISTRIBUTION
 
 2. Distribution & Aggregation Links
-   - Between all d routers and between d and ah routers: process 10, area 0.0.0.10
+   - Between all d routers and between d and ah routers: process 10, area OSPF_AREA_DISTRIBUTION
 
 3. Access & Aggregation Links
-   - Between all a routers and between ah and a routers: process 100, area 0.0.0.100
+   - Between all a routers and between ah and a routers: process 100, area OSPF_AREA_ACCESS
    - Special case between ahrg and ahrb:
        - First link: process 10, area 0.0.0.10
-       - Second link: process 100, area 0.0.0.100
+       - Second link: process 100, area OSPF_AREA_ACCESS
 
 4. CE Links
    - Links involving CE routers are ignored (no OSPF)
@@ -94,8 +94,12 @@ import re
 from scrapli import Scrapli
 
 
-
 DEBUG = False  # set to True or False to enable or suppress debug output
+
+# Define Areas to be used per network region
+OSPF_AREA_CORE = "0.0.0.0"
+OSPF_AREA_DISTRIBUTION = "0.0.0.0"
+OSPF_AREA_ACCESS = "0.0.0.0"
 
 
 # ---------------- Containerlab ----------------
@@ -171,36 +175,36 @@ def link_to_ospf_bak2(endpoints: list) -> tuple[int, str] | None:
         count = link_count_tracker.get(pair_key, 0)
         link_count_tracker[pair_key] = count + 1
         if count == 0:
-            return (10, "0.0.0.10")
+            return (10, OSPF_AREA_DISTRIBUTION)
         else:
-            return (100, "0.0.0.100")
+            return (100, OSPF_AREA_ACCESS)
 
     # Core–Core
     if (n1[0] in "cs") and (n2[0] in "cs"):
-        return (1, "0.0.0.0")
+        return (1, OSPF_AREA_CORE)
 
     # ch–ch dual process
     if n1.startswith("ch") and n2.startswith("ch"):
         if i1.endswith("0/0/0/0") or i2.endswith("0/0/0/0"):
-            return (1, "0.0.0.0")
+            return (1, OSPF_AREA_CORE)
         else:
-            return (10, "0.0.0.10")
+            return (10, OSPF_AREA_DISTRIBUTION)
 
     # c–d and d–d links
     if (n1.startswith("c") and n2.startswith("d")) or (n2.startswith("c") and n1.startswith("d")) or (n1.startswith("d") and n2.startswith("d")):
-        return (10, "0.0.0.10")
+        return (10, OSPF_AREA_DISTRIBUTION)
 
     # a–a, ah–a, ah–ah links
     if (n1.startswith("a") and n2.startswith("a")) or \
        (n1.startswith("ah") and n2.startswith("a")) or \
        (n2.startswith("ah") and n1.startswith("a")):
-        return (100, "0.0.0.100")
+        return (100, OSPF_AREA_ACCESS)
 
     if n1.startswith("ah") and n2.startswith("ah"):
         if i1.endswith("0/0/0/0") or i2.endswith("0/0/0/0"):
-            return (10, "0.0.0.10")
+            return (10, OSPF_AREA_DISTRIBUTION)
         else:
-            return (100, "0.0.0.100")
+            return (100, OSPF_AREA_ACCESS)
 
     return None
 
@@ -219,38 +223,38 @@ def link_to_ospf(endpoints: list) -> tuple | None:
 
     # core↔core
     if (n1[0] in "cs") and (n2[0] in "cs"):
-        return (1, "0.0.0.0")
+        return (1, OSPF_AREA_CORE)
 
     # ch↔ch
     if n1.startswith("ch") and n2.startswith("ch"):
         if i1.endswith("0/0/0/0") or i2.endswith("0/0/0/0"):
-            return (1, "0.0.0.0")
+            return (1, OSPF_AREA_CORE)
         else:
-            return (10, "0.0.0.10")
+            return (10, OSPF_AREA_DISTRIBUTION)
 
     # d↔d or d↔ah
     if (n1.startswith("d") and n2.startswith("d")) or (
         (n1.startswith("d") and n2.startswith("ah")) or (n2.startswith("d") and n1.startswith("ah"))
     ):
-        return (10, "0.0.0.10")
+        return (10, OSPF_AREA_DISTRIBUTION)
 
     # a↔a or ah↔a
     if (n1.startswith("a") and n2.startswith("a")) or (
         (n1.startswith("ah") and n2.startswith("a")) or (n2.startswith("a") and n1.startswith("ah"))
     ):
-        return (100, "0.0.0.100")
+        return (100, OSPF_AREA_ACCESS)
 
     # ah↔ah → distribute across OSPF 10 and 100
     if n1.startswith("ah") and n2.startswith("ah"):
     #if n1.startswith("ahrg") and n2.startswith("ahrb"):
         if sorted([i1, i2])[0] in (i1, i2):  # pick consistently
-            return (10, "0.0.0.10")
+            return (10, OSPF_AREA_DISTRIBUTION)
         else:
-            return (100, "0.0.0.100")
+            return (100, OSPF_AREA_ACCESS)
 
     # NEW: c↔d rule
     if (n1.startswith("c") and n2.startswith("d")) or (n1.startswith("d") and n2.startswith("c")):
-        return (10, "0.0.0.10")
+        return (10, OSPF_AREA_DISTRIBUTION)
 
     return None
 
@@ -263,31 +267,31 @@ def link_to_ospf_bak(endpoints: list) -> tuple | None:
         return None
 
     if (n1[0] in "cs") and (n2[0] in "cs"):
-        return (1, "0.0.0.0")
+        return (1, OSPF_AREA_CORE)
 
     if n1.startswith("ch") and n2.startswith("ch"):
         if i1.endswith("0/0/0/0") or i2.endswith("0/0/0/0"):
-            return (1, "0.0.0.0")
+            return (1, OSPF_AREA_CORE)
         else:
-            return (10, "0.0.0.10")
+            return (10, OSPF_AREA_DISTRIBUTION)
 
     if (n1.startswith("d") and n2.startswith("d")) or (
         (n1.startswith("d") and n2.startswith("ah"))
         or (n2.startswith("d") and n1.startswith("ah"))
     ):
-        return (10, "0.0.0.10")
+        return (10, OSPF_AREA_DISTRIBUTION)
 
     if (n1.startswith("a") and n2.startswith("a")) or (
         (n1.startswith("ah") and n2.startswith("a"))
         or (n2.startswith("a") and n1.startswith("ah"))
     ):
-        return (100, "0.0.0.100")
+        return (100, OSPF_AREA_ACCESS)
 
     if n1.startswith("ah") and n2.startswith("ah"):
         if i1.endswith("0/0/0/0") or i2.endswith("0/0/0/0"):
-            return (10, "0.0.0.10")
+            return (10, OSPF_AREA_DISTRIBUTION)
         else:
-            return (100, "0.0.0.100")
+            return (100, OSPF_AREA_ACCESS)
 
     return None
 
@@ -425,7 +429,7 @@ def configure_ospf(conn, name: str, role: str, router_id: str, neighbors: list, 
 
     for local_intf, neighbor, neigh_intf in neighbors:
         if force_all:
-            pid, area = 1, "0.0.0.0"
+            pid, area = 1, OSPF_AREA_CORE
         else:
             pid_area = link_to_ospf([f"{name}:{local_intf}", f"{neighbor}:{neigh_intf}"])
             if not pid_area:
@@ -489,7 +493,7 @@ def main():
 
         for local_intf, neigh, neigh_intf in neighbors:
             if force_all:
-                pid, area = 1, "0.0.0.0"
+                pid, area = 1, OSPF_AREA_CORE
             else:
                 pid_area = link_to_ospf([f"{name}:{local_intf}", f"{neigh}:{neigh_intf}"])
                 if not pid_area:
