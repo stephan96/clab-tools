@@ -47,20 +47,20 @@ LINK-TO-OSPF RULES
 All rules assume link endpoints are parsed as (local_node:local_iface, neighbor_node:neighbor_iface):
 
 1. Core & Service Links
-   - Links between all "c" and "s" routers: process 1, area 0.0.0.0
+   - Links between all "c" and "s" routers: process 1, area OSPF_AREA_CORE
    - Links between ch routers:
-       - If interface ends with 0/0/0/0: process 1, area 0.0.0.0
-       - Otherwise: process 10, area 0.0.0.10
-   - Links between c and d routers: process 10, area 0.0.0.10
+       - If interface ends with 0/0/0/0: process 1, area OSPF_AREA_CORE
+       - Otherwise: process 10, area OSPF_AREA_DISTRIBUTION
+   - Links between c and d routers: process 10, area OSPF_AREA_DISTRIBUTION
 
 2. Distribution & Aggregation Links
-   - Between all d routers and between d and ah routers: process 10, area 0.0.0.10
+   - Between all d routers and between d and ah routers: process 10, area OSPF_AREA_DISTRIBUTION
 
 3. Access & Aggregation Links
-   - Between all a routers and between ah and a routers: process 100, area 0.0.0.100
+   - Between all a routers and between ah and a routers: process 100, area OSPF_AREA_ACCESS
    - Special case between ahrg and ahrb:
        - First link: process 10, area 0.0.0.10
-       - Second link: process 100, area 0.0.0.100
+       - Second link: process 100, area OSPF_AREA_ACCESS
 
 4. CE Links
    - Links involving CE routers are ignored (no OSPF)
