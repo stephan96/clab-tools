@@ -92,7 +92,10 @@ import json
 import ipaddress
 import re
 from scrapli import Scrapli
-
+import sys
+import time
+import threading
+import itertools
 
 DEBUG = False  # set to True or False to enable or suppress debug output
 
@@ -461,6 +464,35 @@ def welcome_screen():
     print("✨ Welcome to the OSPF Wizard! ✨")
     print("This tool helps you configure OSPF on your Containerlab XRd routers.\n")
 
+
+# Spinner helper
+class Spinner:
+    def __init__(self, message="Working..."):
+        self.spinner = itertools.cycle(["|", "/", "-", "\\"])
+        self.stop_running = False
+        self.thread = None
+        self.message = message
+
+    def start(self):
+        def run():
+            sys.stdout.write(self.message + " ")
+            sys.stdout.flush()
+            while not self.stop_running:
+                sys.stdout.write(next(self.spinner))
+                sys.stdout.flush()
+                time.sleep(0.1)
+                sys.stdout.write("\b")
+        self.thread = threading.Thread(target=run)
+        self.thread.start()
+
+    def stop(self):
+        self.stop_running = True
+        if self.thread:
+            self.thread.join()
+        sys.stdout.write("\b Done!\n")
+        sys.stdout.flush()
+
+
 # ---------------- Main ----------------
 
 def main():
@@ -500,6 +532,10 @@ def main():
     # --- Preview allocations ---
     print("\n🔎 Planned OSPF allocations:")
     preview = {}
+
+    spinner = Spinner(" Collecting router info")
+    spinner.start()
+
     for name, role, host in routers:
         conn = Scrapli(
             host=host,
@@ -520,6 +556,8 @@ def main():
             processes = ospf_processes_for_role(role)
 
         preview[name] = {"host": host, "role": role, "rid": rid, "processes": processes, "neighbors": []}
+
+        spinner.stop()
 
         # Loopback always passive
         preview[name]["neighbors"].append(("Loopback0", "passive in all"))
