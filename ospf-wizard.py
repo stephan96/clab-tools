@@ -446,11 +446,40 @@ def configure_ospf(conn, name: str, role: str, router_id: str, neighbors: list, 
     print(f"✅ Configured OSPF on {name} (RID={router_id})")
 
 
+def welcome_screen():
+    wizard_ascii = r"""
+
+
+ ██████  ███████ ██████  ███████     ██     ██ ██ ███████  █████  ██████  ██████
+██    ██ ██      ██   ██ ██          ██     ██ ██    ███  ██   ██ ██   ██ ██   ██
+██    ██ ███████ ██████  █████       ██  █  ██ ██   ███   ███████ ██████  ██   ██
+██    ██      ██ ██      ██          ██ ███ ██ ██  ███    ██   ██ ██   ██ ██   ██
+ ██████  ███████ ██      ██           ███ ███  ██ ███████ ██   ██ ██   ██ ██████
+
+    """
+    print(wizard_ascii)
+    print("✨ Welcome to the OSPF Wizard! ✨")
+    print("This tool helps you configure OSPF on your Containerlab XRd routers.\n")
+
 # ---------------- Main ----------------
 
 def main():
+
+    welcome_screen()  # Show welcome at start
+
     data = run_containerlab_inspect()
     lab_name = list(data.keys())[0]
+
+    # --- Ask upfront which mode to run ---
+    print("Select OSPF configuration mode:")
+    print("  a) Rule-based allocation (with automatic fallback if no known roles are found)")
+    print("  b) Full fallback (all routers OSPF 1, Area 0)")
+    mode = input("Choose mode (a/b): ").strip().lower()
+
+    force_all = False
+    enforce_fallback = False
+    if mode == "b":
+        enforce_fallback = True
 
     roles = []
     routers = []
@@ -462,14 +491,13 @@ def main():
         roles.append(role)
         routers.append((name, role, node["ipv4_address"].split("/")[0]))
 
-    # Fallback if all routers are "other"
-    force_all = False
-    if all(r == "other" for r in roles):
+    # --- Auto fallback if roles are unknown and user picked mode a ---
+    if not enforce_fallback and all(r == "other" for r in roles):
         answer = input("⚠️ No known router types found. Configure OSPF process 1/area 0 on all routers and links? (y/N): ").strip().lower()
         if answer == "y":
             force_all = True
 
-    # Preview allocations
+    # --- Preview allocations ---
     print("\n🔎 Planned OSPF allocations:")
     preview = {}
     for name, role, host in routers:
@@ -485,14 +513,20 @@ def main():
         neighbors = get_lldp_neighbors(conn, name)
         conn.close()
 
-        processes = [1] if force_all else ospf_processes_for_role(role)
+        # Decide processes
+        if enforce_fallback or force_all:
+            processes = [1]
+        else:
+            processes = ospf_processes_for_role(role)
+
         preview[name] = {"host": host, "role": role, "rid": rid, "processes": processes, "neighbors": []}
 
         # Loopback always passive
         preview[name]["neighbors"].append(("Loopback0", "passive in all"))
 
+        # Assign links
         for local_intf, neigh, neigh_intf in neighbors:
-            if force_all:
+            if enforce_fallback or force_all:
                 pid, area = 1, OSPF_AREA_CORE
             else:
                 pid_area = link_to_ospf([f"{name}:{local_intf}", f"{neigh}:{neigh_intf}"])
@@ -511,7 +545,7 @@ def main():
         print("❌ Aborted.")
         return
 
-    # Apply configs
+    # --- Apply configs ---
     for name, role, host in routers:
         conn = Scrapli(
             host=host,
@@ -524,7 +558,7 @@ def main():
         rid = get_loopback_ip(conn) or "1.1.1.1"
         neighbors = get_lldp_neighbors(conn, name)
         print(f"📡 Configuring {name} ({host}) ...")
-        configure_ospf(conn, name, role, rid, neighbors, force_all=force_all)
+        configure_ospf(conn, name, role, rid, neighbors, force_all=(enforce_fallback or force_all))
         conn.close()
 
     print("\n✅ Done.")
@@ -532,4 +566,92 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+
+
+# def main_old():
+#     data = run_containerlab_inspect()
+#     lab_name = list(data.keys())[0]
+
+#     roles = []
+#     routers = []
+#     for node in data[lab_name]:
+#         if node["kind"] != "cisco_xrd":
+#             continue
+#         name = node["name"].replace(f"clab-{lab_name}-", "")
+#         role = get_router_role(name)
+#         roles.append(role)
+#         routers.append((name, role, node["ipv4_address"].split("/")[0]))
+
+#     # Fallback if all routers are "other"
+#     force_all = False
+#     if all(r == "other" for r in roles):
+#         answer = input("⚠️ No known router types found. Configure OSPF process 1/area 0 on all routers and links? (y/N): ").strip().lower()
+#         if answer == "y":
+#             force_all = True
+
+#     # Preview allocations
+#     print("\n🔎 Planned OSPF allocations:")
+#     preview = {}
+#     for name, role, host in routers:
+#         conn = Scrapli(
+#             host=host,
+#             auth_username="clab",
+#             auth_password="clab@123",
+#             platform="cisco_iosxr",
+#             auth_strict_key=False,
+#         )
+#         conn.open()
+#         rid = get_loopback_ip(conn) or "1.1.1.1"
+#         neighbors = get_lldp_neighbors(conn, name)
+#         conn.close()
+
+#         processes = [1] if force_all else ospf_processes_for_role(role)
+#         preview[name] = {"host": host, "role": role, "rid": rid, "processes": processes, "neighbors": []}
+
+#         # Loopback always passive
+#         preview[name]["neighbors"].append(("Loopback0", "passive in all"))
+
+#         for local_intf, neigh, neigh_intf in neighbors:
+#             if force_all:
+#                 pid, area = 1, OSPF_AREA_CORE
+#             else:
+#                 pid_area = link_to_ospf([f"{name}:{local_intf}", f"{neigh}:{neigh_intf}"])
+#                 if not pid_area:
+#                     continue
+#                 pid, area = pid_area
+#             preview[name]["neighbors"].append((local_intf, f"OSPF {pid} area {area} → {neigh} {neigh_intf}"))
+
+#     for name, info in preview.items():
+#         print(f"- {name} ({info['host']}) role={info['role']} RID={info['rid']} → processes {info['processes']}")
+#         for intf, desc in info["neighbors"]:
+#             print(f"   {intf} → {desc}")
+
+#     confirm = input("\nProceed to push these configs to devices? (y/N): ").strip().lower()
+#     if confirm != "y":
+#         print("❌ Aborted.")
+#         return
+
+#     # Apply configs
+#     for name, role, host in routers:
+#         conn = Scrapli(
+#             host=host,
+#             auth_username="clab",
+#             auth_password="clab@123",
+#             platform="cisco_iosxr",
+#             auth_strict_key=False,
+#         )
+#         conn.open()
+#         rid = get_loopback_ip(conn) or "1.1.1.1"
+#         neighbors = get_lldp_neighbors(conn, name)
+#         print(f"📡 Configuring {name} ({host}) ...")
+#         configure_ospf(conn, name, role, rid, neighbors, force_all=force_all)
+#         conn.close()
+
+#     print("\n✅ Done.")
+
+
+# if __name__ == "__main__":
+#     main()
 
