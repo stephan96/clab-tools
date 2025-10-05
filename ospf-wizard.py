@@ -489,7 +489,7 @@ class Spinner:
         self.stop_running = True
         if self.thread:
             self.thread.join()
-        sys.stdout.write("\b Done!\n")
+        #sys.stdout.write("\b Done!\n")
         sys.stdout.flush()
 
 
@@ -557,8 +557,6 @@ def main():
 
         preview[name] = {"host": host, "role": role, "rid": rid, "processes": processes, "neighbors": []}
 
-        spinner.stop()
-
         # Loopback always passive
         preview[name]["neighbors"].append(("Loopback0", "passive in all"))
 
@@ -572,6 +570,8 @@ def main():
                     continue
                 pid, area = pid_area
             preview[name]["neighbors"].append((local_intf, f"OSPF {pid} area {area} → {neigh} {neigh_intf}"))
+
+    spinner.stop()
 
     for name, info in preview.items():
         print(f"- {name} ({info['host']}) role={info['role']} RID={info['rid']} → processes {info['processes']}")
