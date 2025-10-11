@@ -9,8 +9,12 @@
  log_user 0
 
  if { $ip == "" || $vendor == "" } {
- puts "\nUsage: rtel.sh <vendor: Huawei Containerlab -> hui   Cisco XRd Containerlab -> xrd> <router ip address>"
- puts "Example: rtel.sh hui 1.1.1.1\n"
+ puts "\n rtel.sh - device cli login tool"
+ puts "\nUsage: rtel.sh <vendor> <ip/hostname>"
+ puts "\nHuawei -> hui"
+ puts "Cisco XRd -> xrd"
+ puts "Fortigate -> fg"
+ puts "\nExample: rtel.sh hui 1.1.1.1\n"
  puts "Remember to store your username and password in the script and ensure to set 'chmod 700'!\n"
  exit 1
  }
@@ -23,7 +27,19 @@
  set user_xrd "clab"
  set pw_xrd "clab@123"
 
+# Fortigate Containerlab
+ set user_forti "admin"
+ set pw_forti "admin"
 
+
+ # Fortigate Containerlab
+ if {$vendor eq "fg"} {
+ spawn ssh -o StrictHostKeyChecking=no $user_forti@$ip
+ #expect "admin@fg1's password:"
+ expect "password:"
+ send "$pw_forti\r"
+ interact
+ }
 
  # Huawei Containerlab
  if {$vendor eq "hui"} {
