@@ -1,6 +1,10 @@
 get_fortigate_config.py
 =======================
 
+-> Better use the get_fortigate_config_tftp.py
+-> It is more reliable when backing up large configurations
+-> scrapli based backup sometimes cuts parts of the configuration
+
 Retrieve and save running configuration from FortiGate devices in a Containerlab
 environment, and update the lab topology file with startup-config entries (optional).
 
