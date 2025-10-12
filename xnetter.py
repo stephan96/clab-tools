@@ -34,7 +34,7 @@ from scrapli.exceptions import ScrapliException
 import sys
 
 # ---------- CONFIG ----------
-IPV4_POOL = ipaddress.ip_network("10.0.0.0/24")
+IPV4_POOL = ipaddress.ip_network("10.10.10.0/24")
 IPV4_PREFIXLEN = 31
 IPV6_BASE = ipaddress.IPv6Address("fc00::")
 IPV6_PREFIXLEN = 127

@@ -3,6 +3,10 @@
 get_fortigate_config.py
 =======================
 
+-> Better use the get_fortigate_config_tftp.py
+-> It is more reliable when backing up large configurations
+-> scrapli based backup sometimes cuts parts of the configuration
+
 Retrieve and save running configuration from FortiGate devices in a Containerlab
 environment, and update the lab topology file with startup-config entries (optional).
 
@@ -65,7 +69,6 @@ def get_fortigate_nodes(data: dict):
     return nodes, lab_name
 
 
-
 def fetch_fortigate_config(host: str, username: str, password: str) -> str:
     """Connect to FortiGate via SSH and retrieve running config."""
     conn = Scrapli(
@@ -88,15 +91,33 @@ def fetch_fortigate_config(host: str, username: str, password: str) -> str:
         conn.close()
 
 
-def save_config(labname: str, node: str, config: str):
-    """Save device config to lab config directory."""
+def save_config(labname: str, node: str, config: str, max_backups: int = 5):
+    """
+    Save device config to lab config directory.
+    - Keeps existing configs by rotating them:
+      fg1.cfg → fg1.cfg.bak1 → fg1.cfg.bak2 → ...
+    - The latest config always remains fg1.cfg.
+    - Keeps up to `max_backups` backup versions.
+    """
     config_dir = os.path.join(f"clab-{labname}", node, "config")
     os.makedirs(config_dir, exist_ok=True)
-    filepath = os.path.join(config_dir, f"{node}.cfg")
-    with open(filepath, "w") as f:
+
+    base_path = os.path.join(config_dir, f"{node}.cfg")
+
+    # Rotate backups
+    for i in range(max_backups, 0, -1):
+        bak_path = f"{base_path}.bak{i}"
+        prev_bak = f"{base_path}.bak{i-1}" if i > 1 else base_path
+        if os.path.exists(prev_bak):
+            os.rename(prev_bak, bak_path)
+            #print(f"🔁 Rotated: {prev_bak} → {bak_path}")
+
+    # Save new config as the main file
+    with open(base_path, "w") as f:
         f.write(config)
-    print(f"✅ Saved config for {node} -> {filepath}")
-    return filepath
+
+    print(f"✅ Saved current config for {node} -> {base_path}")
+    return base_path
 
 
 def backup_topology(topology_file: str):
@@ -104,26 +125,6 @@ def backup_topology(topology_file: str):
     backup_file = topology_file + f".bak-{datetime.now().strftime('%Y%m%d%H%M%S')}"
     subprocess.run(["cp", topology_file, backup_file], check=True)
     print(f"📦 Backup created: {backup_file}")
-
-
-def update_topology_bak(labname: str, nodes: list, config_map: dict):
-    """Update topology file with startup-config entries for FortiGate nodes."""
-    topology_file = f"{labname}.clab.yml"
-    backup_topology(topology_file)
-
-    with open(topology_file, "r") as f:
-        topo = yaml.safe_load(f)
-
-    nodes_section = topo.get("topology", {}).get("nodes", {})
-    for nodename, node in nodes_section.items():
-        if "fortigate" in node.get("kind", "").lower() and nodename in config_map:
-            node["startup-config"] = config_map[nodename]
-            print(f"🧩 Added startup-config for {nodename}")
-
-    with open(topology_file, "w") as f:
-        yaml.safe_dump(topo, f, sort_keys=False)
-
-    print(f"🔄 Topology updated: {topology_file}")
 
 
 def update_topology(labname: str, nodes: list, config_map: dict):
