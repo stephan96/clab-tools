@@ -26,7 +26,8 @@ Features
 - Role-based BGP neighbor-group generation
 - Descriptive neighbor entries including peer hostname and loopback
 - Built-in IPv4, VPNv4, VPNv6, and BGP-LU configuration
-- Per-router route-policy `RP_BGPLU_Lo0` to allocate labels for its own loopback /32
+- Per-router route-policy `RP_BGPLU_Lo0` to allocate labels for all loopback0
+-- DEFAULT_LOOPBACK0_NET set to 1.1.1.0/24 - specify your own if using other
 - Optional inclusion or exclusion of CE routers from analysis
 - Dry-run export of planned configurations to `./bgp-wizard_configs`
 - Optional live deployment (push to routers)
@@ -40,7 +41,7 @@ Each router receives a full BGP configuration block that includes:
 - `allocate-label route-policy RP_BGPLU_Lo0` for labeled unicast (BGP-LU)
 - Neighbor-groups dynamically created based on router role
 - Per-peer description lines: “To <hostname> with Loopback0 <IP>”
-- Per-router route-policy restricting label allocation to its own /32
+- Per-router route-policy allocate labels for all loopback0
 
 Example Usage
 -------------
@@ -85,6 +86,7 @@ from scrapli import Scrapli
 
 DEFAULT_AS = 65000
 BGP_PASSWORD = "hurz123"
+DEFAULT_LOOPBACK0_NET = "1.1.1.0/24"
 
 # ---------------- Pretty bits ----------------
 def banner():
@@ -738,7 +740,8 @@ def generate_config_lines(entry: dict) -> List[str]:
     lines.extend([
         "!",
         "route-policy RP_BGPLU_Lo0",
-        f"  if destination in ({rid}/32) then",
+        #f"  if destination in ({rid}/32) then",
+        f"  if destination in ({DEFAULT_LOOPBACK0_NET} ge 32 le 32) then",
         "    pass",
         "  else",
         "    drop",
