@@ -2,6 +2,7 @@
 
 - [bgp-wizard.md](documentation/bgp-wizard.md)
 - [clab_destroy.md](documentation/clab_destroy.md)
+- [fortilic.md](documentation/fortilic.md)
 - [get_clab_config.md](documentation/get_clab_config.md)
 - [get_forti_config.md](documentation/get_forti_config.md)
 - [get_forti_config_tftp.md](documentation/get_forti_config_tftp.md)
