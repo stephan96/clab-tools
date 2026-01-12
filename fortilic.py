@@ -274,6 +274,30 @@ def find_unused_license_files(license_dir: Path) -> List[Path]:
     return unused
 
 
+def find_existing_license_for_host(license_dir: Path, hostname: str) -> Optional[Path]:
+    """
+    Find a host-specific license file for this FortiGate, i.e. a file that was
+    previously renamed to include the hostname:
+
+      <anything>_<hostname>.lic   e.g. FGVMSLTM11111111_fg-gfk-1.lic
+
+    Returns the newest (by name sort) match or None if no match exists.
+    """
+    pattern = str(license_dir / f"*_{hostname}.lic")
+    matches = sorted(Path(p) for p in glob.glob(pattern))
+    if matches:
+        return matches[-1]
+    return None
+
+
+def find_bound_license_files(license_dir: Path) -> List[Path]:
+    """
+    Find all host-specific license files, i.e. files with '_fg-' in the name.
+    """
+    pattern = str(license_dir / "*_fg-*.lic")
+    return sorted(Path(p) for p in glob.glob(pattern))
+
+
 def rename_used_license_file(license_path: Path, hostname: str) -> Path:
     """
     Rename the used license file to include the FortiGate hostname.
@@ -670,6 +694,42 @@ def run_install_mode(dry_run: bool = False) -> int:
     license_dir = prompt_license_dir()
     available_licenses = find_unused_license_files(license_dir)
 
+
+    bound_licenses = find_bound_license_files(license_dir)
+
+    num_fortis = len(nodes)
+    num_unused = len(available_licenses)
+    num_bound = len(bound_licenses)
+
+    print(
+        f"\nFound {num_unused} unused .lic files in {license_dir}\n"
+        f"Found {num_bound} host-specific (_fg-<hostname>.lic) license files\n"
+        f"Detected {num_fortis} FortiGate(s) in the topology."
+    )
+
+    if num_unused == 0 and num_bound == 0:
+        print(
+            "❌ No license files available in the license directory.\n"
+            "   Nothing to do."
+        )
+        return 0
+
+    if num_unused == 0 and num_bound > 0:
+        print(
+            "ℹ️ No unused licenses, but host-specific license files exist and will be\n"
+            "   reused for matching FortiGates where possible."
+        )
+
+    enough_for_all = num_unused >= num_fortis
+    if enough_for_all:
+        print("✅ There are enough unused license files to cover ALL FortiGates.")
+    else:
+        print(
+            "⚠️ There are NOT enough unused license files for all FortiGates.\n"
+            "   FortiGates with matching host-specific licenses will reuse those,\n"
+            "   others will consume unused licenses if available."
+        )
+
     num_fortis = len(nodes)
     num_licenses = len(available_licenses)
 
@@ -726,29 +786,76 @@ def run_install_mode(dry_run: bool = False) -> int:
 
         print(f"\n=== Processing {hostname} ({mgmt_ip}) ===")
 
-        if not available_licenses:
-            msg = "No license files remaining."
-            print("  " + msg)
-            summary.append((hostname, "SKIPPED", msg))
-            continue
+        # Decide which license file to use for this host:
+        # 1) Prefer a host-specific license (FGV..._fg-<hostname>.lic) if present.
+        # 2) Otherwise, fall back to an unused license from the pool.
 
-        # Assign the first available license to this node
-        license_path = available_licenses.pop(0)
-        license_filename = license_path.name
+        from_unused_pool = False
 
-        print(f"  Assigned license file: {license_filename}")
+        existing_license = find_existing_license_for_host(license_dir, hostname)
+        if existing_license is not None:
+            license_path = existing_license
+            license_filename = license_path.name
+            print(f"  Reusing host-specific license file: {license_filename}")
+        else:
+            if not available_licenses:
+                msg = (
+                    "No unused license files available and no host-specific license "
+                    "found for this FortiGate."
+                )
+                print("  " + msg)
+                summary.append((hostname, "SKIPPED", msg))
+                continue
+
+            license_path = available_licenses.pop(0)
+            license_filename = license_path.name
+            from_unused_pool = True
+            print(f"  Assigned NEW license file from pool: {license_filename}")
+
+
+        # if not available_licenses:
+        #     msg = "No license files remaining."
+        #     print("  " + msg)
+        #     summary.append((hostname, "SKIPPED", msg))
+        #     continue
+
+        # # Assign the first available license to this node
+        # license_path = available_licenses.pop(0)
+        # license_filename = license_path.name
+
+        # print(f"  Assigned license file: {license_filename}")
+
 
         if dry_run:
+            if existing_license is not None:
+                src_info = f"reusing host-specific license {license_path}"
+            else:
+                src_info = f"using unused license {license_path}"
+
             msg = (
                 f"[DRY-RUN] Would copy {license_path} to {tftp_dir / license_filename}, "
                 f"connect to {mgmt_ip} as {FG_USERNAME}/{FG_PASSWORD}, "
                 "run 'get system status', decide based on License Status, "
                 f"then execute 'execute restore vmlicense tftp {license_filename} {tftp_ip}', "
-                "rename license file with hostname and clean up TFTP copy."
+                "and finally rename (only for unused pool) & clean up TFTP copy. "
+                f"Source: {src_info}"
             )
             print("  " + msg)
             summary.append((hostname, "DRY-RUN", msg))
             continue
+
+
+        # if dry_run:
+        #     msg = (
+        #         f"[DRY-RUN] Would copy {license_path} to {tftp_dir / license_filename}, "
+        #         f"connect to {mgmt_ip} as {FG_USERNAME}/{FG_PASSWORD}, "
+        #         "run 'get system status', decide based on License Status, "
+        #         f"then execute 'execute restore vmlicense tftp {license_filename} {tftp_ip}', "
+        #         "rename license file with hostname and clean up TFTP copy."
+        #     )
+        #     print("  " + msg)
+        #     summary.append((hostname, "DRY-RUN", msg))
+        #     continue
 
         # Scrapli connection for get system status / license decision
         try:
@@ -758,7 +865,8 @@ def run_install_mode(dry_run: bool = False) -> int:
             print("  " + msg)
             summary.append((hostname, "FAILED", msg))
             # Put license back so it can be used later
-            available_licenses.insert(0, license_path)
+            if from_unused_pool:
+                available_licenses.insert(0, license_path)
             continue
 
         try:
@@ -778,7 +886,8 @@ def run_install_mode(dry_run: bool = False) -> int:
                     summary.append((hostname, "SKIPPED", msg))
                     conn.close()
                     # Put license back so it stays unused
-                    available_licenses.insert(0, license_path)
+                    if from_unused_pool:
+                        available_licenses.insert(0, license_path)
                     continue
             elif status is None:
                 ans = input(
@@ -790,7 +899,8 @@ def run_install_mode(dry_run: bool = False) -> int:
                     print("  " + msg)
                     summary.append((hostname, "SKIPPED", msg))
                     conn.close()
-                    available_licenses.insert(0, license_path)
+                    if from_unused_pool:
+                        available_licenses.insert(0, license_path)
                     continue
             else:
                 # "Invalid" or other status - proceed without extra confirmation
@@ -806,7 +916,8 @@ def run_install_mode(dry_run: bool = False) -> int:
                 conn.close()
             except Exception:
                 pass
-            available_licenses.insert(0, license_path)
+            if from_unused_pool:
+                available_licenses.insert(0, license_path)
             continue
 
         # --- COPY LICENSE TO TFTP DIRECTORY ---
@@ -819,7 +930,8 @@ def run_install_mode(dry_run: bool = False) -> int:
             print("  " + msg)
             summary.append((hostname, "FAILED", msg))
             # Put license back so it can be retried later
-            available_licenses.insert(0, license_path)
+            if from_unused_pool:
+                available_licenses.insert(0, license_path)
             continue
 
         # --- RESTORE LICENSE USING PARAMIKO ---
@@ -840,9 +952,17 @@ def run_install_mode(dry_run: bool = False) -> int:
             # do NOT rename license file
             continue
 
-        # --- SUCCESS: RENAME ORIGINAL LICENSE FILE ---
-        new_path = rename_used_license_file(license_path, hostname)
-        print(f"  Renamed used license file to: {new_path.name}")
+        # --- SUCCESS: RENAME ORIGINAL LICENSE FILE (only for unused pool) ---
+        if from_unused_pool:
+            new_path = rename_used_license_file(license_path, hostname)
+            print(f"  Renamed used license file to: {new_path.name}")
+        else:
+            new_path = license_path
+            print("  Reused existing host-specific license file; no rename needed.")
+
+        ## --- SUCCESS: RENAME ORIGINAL LICENSE FILE ---
+        # new_path = rename_used_license_file(license_path, hostname)
+        # print(f"  Renamed used license file to: {new_path.name}")
 
         # --- CLEANUP TFTP FILE ---
         if tftp_license_path.exists():
